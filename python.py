@@ -8,7 +8,7 @@ from sklearn.metrics import classification_report
 # Load dataset
 @st.cache_data
 def load_data():
-    df = pd.read_csv('english_test_with_labels.csv')
+    df = pd.read_csv('Dataset-SA.csv')
     return df
 
 # Preprocess data
