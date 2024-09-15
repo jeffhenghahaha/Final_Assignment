@@ -68,14 +68,13 @@ unique_labels = sorted(set(y_test) | set(y_pred))
 cm = confusion_matrix(y_test, y_pred, labels=unique_labels)
 plot_confusion_matrix(cm, unique_labels)
 
-# Debug: Show sample data for y_test and y_pred
+# Sample data for y_test and y_pred
 st.write("Sample y_test values:")
 st.write(y_test.head())
 st.write("Sample y_pred values:")
 st.write(pd.Series(y_pred).head())
 
 # Create DataFrames for actual and predicted sentiment counts
-# Verify creation and renaming of columns
 actual_counts = pd.DataFrame(y_test.value_counts()).reset_index()
 actual_counts.columns = ['Sentiment', 'Count_Actual']
 
@@ -89,7 +88,7 @@ st.write(actual_counts)
 st.write("Predicted counts DataFrame:")
 st.write(predicted_counts)
 
-# Ensure the Sentiment columns are properly aligned and match
+# Ensure Sentiment columns are properly aligned
 if 'Sentiment' in actual_counts.columns and 'Sentiment' in predicted_counts.columns:
     actual_counts['Sentiment'] = actual_counts['Sentiment'].astype(str)
     predicted_counts['Sentiment'] = predicted_counts['Sentiment'].astype(str)
@@ -104,6 +103,16 @@ if 'Sentiment' in actual_counts.columns and 'Sentiment' in predicted_counts.colu
     plt.xlabel('Sentiment')
     plt.ylabel('Count')
     plt.xticks(rotation=45)
+    st.pyplot(fig)
+
+    # Pie chart for sentiment distribution
+    sentiment_counts = pd.concat([actual_counts.set_index('Sentiment'), predicted_counts.set_index('Sentiment')], axis=1, join='outer').fillna(0)
+    sentiment_counts.columns = ['Count_Actual', 'Count_Predicted']
+    
+    pie_data = sentiment_counts[['Count_Actual', 'Count_Predicted']].sum()
+    fig, ax = plt.subplots(figsize=(8, 6))
+    pie_data.plot(kind='pie', autopct='%1.1f%%', startangle=90, ax=ax, colors=['skyblue', 'orange'])
+    plt.title('Overall Sentiment Distribution')
     st.pyplot(fig)
 else:
     st.error("The 'Sentiment' column is missing in one of the DataFrames.")
