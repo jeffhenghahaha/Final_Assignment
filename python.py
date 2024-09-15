@@ -2,13 +2,15 @@ import pandas as pd
 from sklearn.model_selection import train_test_split
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.naive_bayes import MultinomialNB
-from sklearn.metrics import accuracy_score, classification_report, confusion_matrix
+from sklearn.linear_model import LogisticRegression
+from sklearn.svm import SVC
 import nltk
 from nltk.corpus import stopwords
 import string
+import joblib  # Import joblib for saving/loading models
 import streamlit as st
 import matplotlib.pyplot as plt
-import seaborn as sns
+from io import StringIO
 
 # Download stopwords
 nltk.download('stopwords')
@@ -20,6 +22,8 @@ df = pd.read_csv('Dataset-SA.csv')
 stop_words = set(stopwords.words('english'))
 
 def preprocess_text(text):
+    if not isinstance(text, str):  # Check if text is a string
+        return ''
     text = text.lower()
     text = text.translate(str.maketrans('', '', string.punctuation))
     words = [word for word in text.split() if word not in stop_words]
@@ -28,7 +32,7 @@ def preprocess_text(text):
 # Apply preprocessing
 df['Review'] = df['Review'].apply(preprocess_text)
 
-# Split data
+# Prepare data for modeling
 X = df['Review']
 y = df['Sentiment']
 
@@ -39,98 +43,90 @@ X_tfidf = tfidf.fit_transform(X)
 # Train-test split
 X_train, X_test, y_train, y_test = train_test_split(X_tfidf, y, test_size=0.3, random_state=42)
 
-# Train model
-model = MultinomialNB()
-model.fit(X_train, y_train)
+# Create models: Naive Bayes, SVM, and Logistic Regression
+models = {
+    'Naive Bayes': MultinomialNB(),
+    'Support Vector Machine': SVC(kernel='linear', random_state=42),
+    'Logistic Regression': LogisticRegression(random_state=42, max_iter=500)
+}
 
-# Evaluate model
-y_pred = model.predict(X_test)
-accuracy = accuracy_score(y_test, y_pred)
+# Train each model and save them
+for name, model in models.items():
+    model.fit(X_train, y_train)
+    joblib.dump(model, f'{name.replace(" ", "_").lower()}_model.joblib')
 
-# Streamlit app
+# Save the TF-IDF vectorizer
+joblib.dump(tfidf, 'tfidf_vectorizer.joblib')
+
+# Streamlit app header
 st.title('Sentiment Analysis on Product Reviews')
 
-st.write(f"Model Accuracy: {accuracy * 100:.2f}%")
-st.write("Classification Report:")
-st.text(classification_report(y_test, y_pred))
+# Display the total number of reviews before preprocessing
+st.write(f"*Total Number of Reviews before Preprocessing:* {len(df)}")
 
-# Confusion Matrix
-def plot_confusion_matrix(cm, labels):
-    plt.figure(figsize=(10, 7))
-    sns.heatmap(cm, annot=True, fmt='d', cmap='Blues', xticklabels=labels, yticklabels=labels)
-    plt.xlabel('Predicted')
-    plt.ylabel('Actual')
-    plt.title('Confusion Matrix')
-    st.pyplot()
+# File uploader
+uploaded_file = st.file_uploader("Upload a CSV file containing reviews")
 
-# Get unique labels
-unique_labels = sorted(set(y_test) | set(y_pred))
-cm = confusion_matrix(y_test, y_pred, labels=unique_labels)
-plot_confusion_matrix(cm, unique_labels)
-
-# Sample data for y_test and y_pred
-st.write("Sample y_test values:")
-st.write(y_test.head())
-st.write("Sample y_pred values:")
-st.write(pd.Series(y_pred).head())
-
-# Create DataFrames for actual and predicted sentiment counts
-actual_counts = pd.DataFrame(y_test.value_counts()).reset_index()
-actual_counts.columns = ['Sentiment', 'Count_Actual']
-
-predicted_counts = pd.DataFrame(pd.Series(y_pred).value_counts()).reset_index()
-predicted_counts.columns = ['Sentiment', 'Count_Predicted']
-
-# Display DataFrames for debugging
-st.write("Actual counts DataFrame:")
-st.write(actual_counts)
-
-st.write("Predicted counts DataFrame:")
-st.write(predicted_counts)
-
-# Ensure Sentiment columns are properly aligned
-if 'Sentiment' in actual_counts.columns and 'Sentiment' in predicted_counts.columns:
-    actual_counts['Sentiment'] = actual_counts['Sentiment'].astype(str)
-    predicted_counts['Sentiment'] = predicted_counts['Sentiment'].astype(str)
-
-    # Merge actual and predicted counts
-    sentiment_comparison = pd.merge(actual_counts, predicted_counts, on='Sentiment', how='outer').fillna(0)
-
-    # Plot actual vs predicted sentiment comparison
-    fig, ax = plt.subplots(figsize=(8, 6))
-    sentiment_comparison.plot(kind='bar', x='Sentiment', ax=ax, color=['skyblue', 'orange'])
-    plt.title('Actual vs Predicted Sentiment Counts')
-    plt.xlabel('Sentiment')
-    plt.ylabel('Count')
-    plt.xticks(rotation=45)
-    st.pyplot(fig)
-
-    # Pie chart for sentiment distribution
-    sentiment_counts = pd.concat([actual_counts.set_index('Sentiment'), predicted_counts.set_index('Sentiment')], axis=1, join='outer').fillna(0)
-    sentiment_counts.columns = ['Count_Actual', 'Count_Predicted']
-    
-    pie_data = sentiment_counts[['Count_Actual', 'Count_Predicted']].sum()
-    fig, ax = plt.subplots(figsize=(8, 6))
-    pie_data.plot(kind='pie', autopct='%1.1f%%', startangle=90, ax=ax, colors=['skyblue', 'orange'])
-    plt.title('Overall Sentiment Distribution')
-    st.pyplot(fig)
-else:
-    st.error("The 'Sentiment' column is missing in one of the DataFrames.")
-    if 'Sentiment' not in actual_counts.columns:
-        st.error("The 'Sentiment' column is missing in actual_counts DataFrame.")
-    if 'Sentiment' not in predicted_counts.columns:
-        st.error("The 'Sentiment' column is missing in predicted_counts DataFrame.")
-
-# Predict sentiment
-def predict_sentiment(user_comment):
+# Predict sentiment with the selected model (Naive Bayes as default)
+def predict_sentiment(user_comment, model):
     processed_comment = preprocess_text(user_comment)
     user_comment_tfidf = tfidf.transform([processed_comment])
     prediction = model.predict(user_comment_tfidf)
     return prediction[0]
 
+# Handle file upload
+if uploaded_file is not None:
+    # Read and preprocess the uploaded file
+    uploaded_df = pd.read_csv(uploaded_file)
+    if 'Review' not in uploaded_df.columns:
+        st.error("The uploaded file must contain a 'Review' column.")
+    else:
+        # Ensure 'Review' column is a string
+        uploaded_df['Review'] = uploaded_df['Review'].astype(str)
+        uploaded_df['Review'] = uploaded_df['Review'].apply(preprocess_text)
+        X_uploaded = uploaded_df['Review']
+        X_uploaded_tfidf = tfidf.transform(X_uploaded)
+        
+        # Load the Naive Bayes model by default
+        model = joblib.load('naive_bayes_model.joblib')
+        y_pred_uploaded = model.predict(X_uploaded_tfidf)
+        uploaded_df['Sentiment'] = y_pred_uploaded
+        
+        # Calculate sentiment distribution
+        sentiment_distribution = uploaded_df['Sentiment'].value_counts()
+        sentiment_labels = sentiment_distribution.index
+        sentiment_sizes = sentiment_distribution.values
+
+        # Define colors for sentiment categories
+        colors = ['lightblue', 'lightcoral', 'lightgreen', 'lightskyblue']
+
+        # Calculate percentages
+        sentiment_percentages = sentiment_sizes / sentiment_sizes.sum() * 100
+
+        # Plot pie chart
+        st.write("### Sentiment Distribution Pie Chart (Uploaded File):")
+        fig, ax = plt.subplots(figsize=(8, 6))
+        ax.pie(sentiment_percentages, labels=sentiment_labels, autopct='%1.1f%%', startangle=140, colors=colors[:len(sentiment_labels)])
+        ax.axis('equal')  # Equal aspect ratio ensures that pie is drawn as a circle.
+        st.pyplot(fig)
+
+        # Display the review count table
+        review_count_table = pd.DataFrame({'Sentiment': sentiment_labels, 'Review Count': sentiment_sizes})
+        st.write("### Review Count Table (Uploaded File):")
+        st.table(review_count_table)
+
 # User input for predicting sentiment
 user_comment = st.text_input("Enter your product review:")
 
 if user_comment:
-    sentiment = predict_sentiment(user_comment)
-    st.write(f"The sentiment of the comment is: {sentiment}")
+    # Load the Naive Bayes model
+    model = joblib.load('naive_bayes_model.joblib')
+    sentiment = predict_sentiment(user_comment, model)
+    
+    # Define color based on sentiment
+    color = 'green' if sentiment == 'positive' else 'red'
+    
+    # Display sentiment with color
+    st.markdown(f"<p style='color:{color}; font-size:20px;'>*The sentiment of the comment is:* {sentiment}</p>", unsafe_allow_html=True)
+
+# The pie chart is displayed only if a file is uploaded
