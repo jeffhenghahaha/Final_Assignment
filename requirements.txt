@@ -1,6 +1,7 @@
+streamlit==1.38.0
+joblib
 pandas
-scikit-learn
-nltk
-streamlit
+numpy
 matplotlib
-seaborn
+nltk
+scikit-learn
