@@ -1,119 +1,84 @@
-# sentiment_analysis.py
-
-import re
 import pandas as pd
+from sklearn.model_selection import train_test_split
+from sklearn.feature_extraction.text import TfidfVectorizer
+from sklearn.naive_bayes import MultinomialNB
+from sklearn.metrics import accuracy_score, classification_report, confusion_matrix
 import nltk
 from nltk.corpus import stopwords
-from nltk.stem import WordNetLemmatizer
-from sklearn.feature_extraction.text import TfidfVectorizer
-from sklearn.model_selection import train_test_split
-from sklearn.naive_bayes import MultinomialNB
-from sklearn.svm import SVC
-from sklearn.metrics import accuracy_score, classification_report, confusion_matrix
+import string
+import streamlit as st
 import matplotlib.pyplot as plt
 import seaborn as sns
 
-# Download NLTK resources
+# Download stopwords
 nltk.download('stopwords')
-nltk.download('wordnet')
 
-# Preprocess text function
+# Load the dataset
+df = pd.read_csv('Dataset-SA.csv')
+
+# Preprocessing function
+stop_words = set(stopwords.words('english'))
+
 def preprocess_text(text):
-    # Remove special characters and digits
-    text = re.sub(r'[^a-zA-Z\s]', '', text)
     text = text.lower()
-
-    # Tokenization
-    words = text.split()
-
-    # Remove stop words and lemmatize
-    stop_words = set(stopwords.words('english'))
-    lemmatizer = WordNetLemmatizer()
-    words = [lemmatizer.lemmatize(word) for word in words if word not in stop_words]
-
+    text = text.translate(str.maketrans('', '', string.punctuation))
+    words = [word for word in text.split() if word not in stop_words]
     return ' '.join(words)
 
-# Load and preprocess dataset
-def load_and_preprocess_data(data_path):
-    # Load data
-    data = pd.read_csv(data_path)
+# Apply preprocessing
+df['Review'] = df['Review'].apply(preprocess_text)
 
-    # Combine 'Summary' and 'Review' into a single text column for analysis
-    data['text'] = data['Summary'] + " " + data['Review']
-    data['cleaned_text'] = data['text'].apply(preprocess_text)
+# Split data
+X = df['Review']
+y = df['Sentiment']
 
-    return data
+# TF-IDF transformation
+tfidf = TfidfVectorizer(max_features=5000)
+X_tfidf = tfidf.fit_transform(X)
 
-# Train and evaluate models
-def train_and_evaluate_models(data):
-    # Convert text to numerical data using TF-IDF
-    vectorizer = TfidfVectorizer(max_features=5000)
-    X = vectorizer.fit_transform(data['cleaned_text']).toarray()
-    y = data['Sentiment']  # Using the 'Sentiment' column
+# Train-test split
+X_train, X_test, y_train, y_test = train_test_split(X_tfidf, y, test_size=0.3, random_state=42)
 
-    # Split data into training and test sets
-    X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
+# Train model
+model = MultinomialNB()
+model.fit(X_train, y_train)
 
-    # Initialize models
-    models = {
-        "Naive Bayes": MultinomialNB(),
-        "Support Vector Machine (SVM)": SVC(kernel='linear')
-    }
-    
-    # Store accuracy results
-    accuracy_results = {}
+# Evaluate model
+y_pred = model.predict(X_test)
+accuracy = accuracy_score(y_test, y_pred)
 
-    # Train and evaluate each model
-    for model_name, model in models.items():
-        # Train the model
-        model.fit(X_train, y_train)
+# Streamlit app
+st.title('Sentiment Analysis on Product Reviews')
 
-        # Make predictions
-        y_pred = model.predict(X_test)
+st.write(f"Model Accuracy: {accuracy * 100:.2f}%")
+st.write("Classification Report:")
+st.text(classification_report(y_test, y_pred))
 
-        # Evaluate the model
-        accuracy = accuracy_score(y_test, y_pred)
-        accuracy_results[model_name] = accuracy
+# Determine the unique labels
+unique_labels = sorted(set(y_test) | set(y_pred))
+print("Unique labels:", unique_labels)
 
-        print(f"\nModel: {model_name}")
-        print(f"Accuracy: {accuracy}")
-        print("Classification Report:")
-        print(classification_report(y_test, y_pred))
+# Confusion Matrix
+def plot_confusion_matrix(cm, labels):
+    plt.figure(figsize=(10, 7))
+    sns.heatmap(cm, annot=True, fmt='d', cmap='Blues', xticklabels=labels, yticklabels=labels)
+    plt.xlabel('Predicted')
+    plt.ylabel('Actual')
+    plt.title('Confusion Matrix')
+    st.pyplot()
 
-        # Confusion Matrix
-        cm = confusion_matrix(y_test, y_pred)
-        plt.figure(figsize=(5, 4))
-        sns.heatmap(cm, annot=True, fmt='d', cmap='Blues')
-        plt.title(f"Confusion Matrix - {model_name}")
-        plt.xlabel('Predicted')
-        plt.ylabel('Actual')
-        plt.show()
-    
-    return accuracy_results
+cm = confusion_matrix(y_test, y_pred, labels=unique_labels)
+plot_confusion_matrix(cm, unique_labels)
 
-# Plot model comparison
-def plot_model_comparison(accuracy_results):
-    models = list(accuracy_results.keys())
-    accuracies = list(accuracy_results.values())
+# Predict sentiment
+def predict_sentiment(user_comment):
+    processed_comment = preprocess_text(user_comment)
+    user_comment_tfidf = tfidf.transform([processed_comment])
+    prediction = model.predict(user_comment_tfidf)
+    return prediction[0]
 
-    # Plotting
-    plt.figure(figsize=(8, 6))
-    plt.barh(models, accuracies, color='skyblue')
-    plt.xlabel('Accuracy')
-    plt.title('Model Comparison')
-    plt.xlim(0, 1)  # Accuracy is between 0 and 1
-    plt.show()
+user_comment = st.text_input("Enter your product review:")
 
-# Main function
-if __name__ == "__main__":
-    # Path to your CSV file containing the dataset
-    data_path = 'Dataset-SA.csv'  # Ensure this file is in the same directory
-    
-    # Load and preprocess data
-    data = load_and_preprocess_data(data_path)
-    
-    # Train and evaluate models
-    accuracy_results = train_and_evaluate_models(data)
-    
-    # Plot model comparison
-    plot_model_comparison(accuracy_results)
+if user_comment:
+    sentiment = predict_sentiment(user_comment)
+    st.write(f"The sentiment of the comment is: {sentiment}")
