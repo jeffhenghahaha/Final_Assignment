@@ -120,7 +120,7 @@ user_comment = st.text_input("Enter your product review:")
 
 if user_comment:
     # Load the Naive Bayes model
-    model = joblib.load('support_vector_machine_model.joblib')
+    model = joblib.load('naive_bayes_model.joblib')
     sentiment = predict_sentiment(user_comment, model)
     
     # Define color based on sentiment
