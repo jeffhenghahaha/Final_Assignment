@@ -16,7 +16,7 @@ from io import StringIO
 nltk.download('stopwords')
 
 # Load the dataset
-df = pd.read_csv('Dataset-SA.csv')
+df = pd.read_csv('flipkart_product.csv')
 
 # Preprocessing function
 stop_words = set(stopwords.words('english'))
