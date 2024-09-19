@@ -36,7 +36,7 @@ df['Review'] = df['Review'].apply(preprocess_text)
 X = df['Review']
 y = df['Sentiment']
 
-# TF-IDF transformation
+# TF-IDF transformation 限制词
 tfidf = TfidfVectorizer(max_features=5000)
 X_tfidf = tfidf.fit_transform(X)
 
