@@ -115,20 +115,18 @@ if uploaded_file is not None:
         st.write("### Review Count Table (Uploaded File):")
         st.table(review_count_table)
 
-# Load all models for batch prediction
-models = {
-    'Naive Bayes': joblib.load('naive_bayes_model.joblib'),
-    'Support Vector Machine': joblib.load('support_vector_machine_model.joblib'),
-    'Logistic Regression': joblib.load('logistic_regression_model.joblib')
-}
-
 # User input for predicting sentiment
 user_comment = st.text_input("Enter your product review:")
 
-# If the user provides a comment, predict sentiment using all models
 if user_comment:
-    st.write("### Sentiment Predictions from Different Models:")
-    for model_name, model in models.items():
-        sentiment = predict_sentiment(user_comment, model)
-        color = 'green' if sentiment == 'positive' else 'red'
-        st.markdown(f"<p style='color:{color}; font-size:20px;'>{model_name}: {sentiment}</p>", unsafe_allow_html=True)
+    # Load the Naive Bayes model
+    model = joblib.load('naive_bayes_model.joblib')
+    sentiment = predict_sentiment(user_comment, model)
+    
+    # Define color based on sentiment
+    color = 'green' if sentiment == 'positive' else 'red'
+    
+    # Display sentiment with color
+    st.markdown(f"<p style='color:{color}; font-size:20px;'>*The sentiment of the comment is:* {sentiment}</p>", unsafe_allow_html=True)
+
+# The pie chart is displayed only if a file is uploaded
